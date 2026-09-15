@@ -1,653 +1,584 @@
-# PySpark Analytics Pipeline
+xrk Analytics Pipeline
 
-A generic and extensible analytics and ETL pipeline built with Apache Spark (PySpark), Parquet, DuckDB and Apache Superset.
+A modular and extensible analytics and ETL pipeline built with Apache Spark (PySpark), Parquet, DuckDB, and Apache Superset.
 
-The project is designed as a reusable data engineering foundation that can support multiple data sources and formats. The current implementation uses the Brazilian E-Commerce Public Dataset by Olist as a reference data source.
-
----
+The current implementation uses the **Brazilian E-Commerce Public Dataset by Olist** as the initial reference data source. The architecture is designed to support additional data sources and ingestion mechanisms in the future.
 
 ## Architecture
 
-The pipeline follows a layered data architecture:
+Raw Data  
+↓  
+Bronze  
+↓  
+Silver  
+↓  
+Gold  
+↓  
+DuckDB  
+↓  
+Apache Superset / Power BI
 
-    Data Sources
-         │
-         ▼
-    Bronze Layer
-         │
-         ▼
-    Silver Layer
-         │
-         ▼
-    Gold Layer (Parquet)
-         │
-         ▼
-       DuckDB
-         │
-         ▼
-    Apache Superset
-         │
-         ▼
-      Dashboard
+PySpark is responsible for ingestion, transformation, dimensional modeling, and data-quality validation.
 
-### Data Layers
+DuckDB provides a lightweight analytical SQL layer directly on top of the Gold Parquet datasets.
 
-#### Bronze
+Apache Superset provides interactive dashboards on Linux, while Power BI can be used as the Windows BI layer.
 
-The Bronze layer contains the ingested source data converted from CSV into Parquet.
+## Project Structure
 
-The goal is to preserve the original structure while using a columnar storage format that can be efficiently processed by Spark and queried by analytical engines.
+pyspark-analytics-pipeline/
+├── data/
+│   ├── raw/
+│   ├── bronze/
+│   ├── silver/
+│   ├── gold/
+│   └── analytics/
+├── src/
+│   ├── ingestion/
+│   ├── transformations/
+│   ├── analytics/
+│   └── utils/
+├── notebooks/
+├── powerbi/
+├── superset/
+│   ├── docker-compose.yml
+│   ├── docker/
+│   │   ├── .env.example
+│   │   ├── requirements-local.txt
+│   │   └── superset_config.py
+│   ├── dashboard/
+│   │   └── superset-overview.png
+│   └── README.md
+├── tests/
+├── requirements.txt
+├── README.md
+└── .gitignore
 
-#### Silver
+## Data Source
 
-The Silver layer contains cleaned and transformed datasets.
+The initial implementation uses the Olist Brazilian E-Commerce Public Dataset.
 
-Typical transformations include:
+The dataset contains approximately 100,000 orders from the Brazilian e-commerce marketplace Olist between 2016 and 2018.
 
-- Removing invalid records
-- Handling null values
-- Normalizing strings
-- Standardizing data types
-- Creating derived columns
-- Cleaning timestamps and dates
-- Calculating delivery metrics
-- Calculating product volume
-- Calculating item totals
+The source data contains information about:
 
-#### Gold
+- Orders
+- Customers
+- Products
+- Sellers
+- Order items
+- Payments
+- Reviews
+- Geolocation
+- Product categories
 
-The Gold layer contains analytics-ready datasets organized as a star schema.
+The raw CSV files are stored under:
 
-The current model contains:
+data/raw/
 
-Fact Tables:
+The Olist dataset is used as the first reference implementation. The pipeline itself is not limited to Olist.
+
+## Data Layers
+
+### Raw
+
+The Raw layer contains the original source files without modification.
+
+Purpose:
+
+- Preserve source data
+- Provide reproducible pipeline input
+- Keep source data separate from processing logic
+
+### Bronze
+
+The Bronze layer converts raw CSV data into Parquet.
+
+Example datasets:
+
+- customers
+- geolocation
+- order_items
+- order_payments
+- order_reviews
+- orders
+- products
+- sellers
+- product_category_name_translation
+
+The Bronze ingestion logic is designed to be reusable for additional CSV sources.
+
+### Silver
+
+The Silver layer contains cleaned and standardized datasets.
+
+Transformations include:
+
+- Null filtering
+- Type casting
+- String normalization
+- Date conversion
+- Timestamp handling
+- Derived metrics
+- Numeric normalization
+- Basic business-rule preparation
+
+Examples include:
+
+- normalized order status
+- standardized customer city and state
+- cleaned product categories
+- delivery duration
+- item totals
+- normalized payment fields
+
+### Gold
+
+The Gold layer contains analytics-ready datasets based on a dimensional model.
+
+Current Gold datasets:
 
 - fact_sales
 - fact_orders
-
-Dimension Tables:
-
 - dim_customer
 - dim_product
 - dim_seller
 - dim_date
 
----
-
 ## Star Schema
 
-    dim_customer
-         │
-         │ 1 : *
-         ▼
-    fact_sales
-     ▲    ▲    ▲
-     │    │    │
-     │    │    └──────── dim_seller
-     │    │
-     │    └───────────── dim_product
-     │
-     └────────────────── dim_date
-
-The star schema separates measurable business events from descriptive dimensions.
-
-### Fact Sales
-
-The grain of fact_sales is one row per order item.
-
-It contains:
-
-- Order
-- Customer
-- Product
-- Seller
-- Date
-- Product price
-- Freight value
-- Item total
-- Dimension keys
-
-### Fact Orders
-
-The grain of fact_orders is one row per order.
-
-It contains:
-
-- Order
-- Customer
-- Date
-- Order status
-- Purchase timestamp
-- Delivery timestamps
-- Delivery duration
-- Payment information
-- Payment count
-- Payment installments
-- Payment type
-
----
-
-## Data Source
-
-The initial implementation uses the Brazilian E-Commerce Public Dataset by Olist.
-
-The dataset contains approximately 100,000 orders from the Brazilian e-commerce market between 2016 and 2018.
-
-The source consists of nine CSV files:
-
-- olist_customers_dataset.csv
-- olist_geolocation_dataset.csv
-- olist_order_items_dataset.csv
-- olist_order_payments_dataset.csv
-- olist_order_reviews_dataset.csv
-- olist_orders_dataset.csv
-- olist_products_dataset.csv
-- olist_sellers_dataset.csv
-- product_category_name_translation.csv
-
-The architecture is intentionally not tied to Olist. Additional data sources can be added later through the ingestion layer.
-
----
-
-## Project Structure
-
-    pyspark-analytics-pipeline/
-    │
-    ├── data/
-    │   ├── raw/
-    │   ├── bronze/
-    │   ├── silver/
-    │   ├── gold/
-    │   └── analytics/
-    │
-    ├── src/
-    │   ├── ingestion/
-    │   │   ├── csv_reader.py
-    │   │   ├── bronze_loader.py
-    │   │   └── olist_bronze.py
-    │   │
-    │   ├── transformations/
-    │   │   ├── orders.py
-    │   │   ├── orders_silver.py
-    │   │   ├── order_items.py
-    │   │   ├── order_items_silver.py
-    │   │   ├── order_payments.py
-    │   │   ├── order_payments_silver.py
-    │   │   ├── customers.py
-    │   │   ├── customers_silver.py
-    │   │   ├── products.py
-    │   │   ├── products_silver.py
-    │   │   ├── sellers.py
-    │   │   └── sellers_silver.py
-    │   │
-    │   ├── analytics/
-    │   │   ├── dim_customer.py
-    │   │   ├── dim_product.py
-    │   │   ├── dim_seller.py
-    │   │   ├── dim_date.py
-    │   │   ├── fact_sales.py
-    │   │   ├── fact_sales_quality.py
-    │   │   ├── fact_orders.py
-    │   │   ├── fact_orders_quality.py
-    │   │   ├── duckdb_queries.py
-    │   │   └── duckdb_views.py
-    │   │
-    │   └── utils/
-    │       ├── spark_session.py
-    │       ├── paths.py
-    │       └── duckdb.py
-    │
-    ├── notebooks/
-    ├── powerbi/
-    ├── tests/
-    ├── pipeline.py
-    ├── requirements.txt
-    ├── README.md
-    └── .gitignore
-
----
-
-## Technologies
-
-- Python 3
-- Apache Spark
-- PySpark
-- Parquet
-- DuckDB
-- Apache Superset
-- Docker
-- Pytest
-- Power BI
-
----
-
-## Installation
-
-Create and activate a Python virtual environment:
-
-    python3 -m venv .venv
-    source .venv/bin/activate
-
-Install the Python dependencies:
-
-    pip install -r requirements.txt
-
----
-
-## Running the Pipeline
-
-The complete pipeline can be executed with:
-
-    python pipeline.py
-
-The pipeline executes the following stages:
-
-1. Bronze ingestion
-2. Orders Silver
-3. Order Items Silver
-4. Order Payments Silver
-5. Customers Silver
-6. Products Silver
-7. Sellers Silver
-8. Customer Dimension
-9. Product Dimension
-10. Seller Dimension
-11. Date Dimension
-12. Fact Sales
-13. Fact Orders
-14. Fact Sales Quality
-15. Fact Orders Quality
-
-Each step reports its status and execution duration.
-
-Example:
-
-    PIPELINE SUMMARY
+The analytical model follows a star-schema design.
 
-    ✓ Bronze ingestion               SUCCESS
-    ✓ Orders Silver                  SUCCESS
-    ✓ Order Items Silver             SUCCESS
-    ✓ Order Payments Silver          SUCCESS
-    ✓ Customers Silver               SUCCESS
-    ✓ Products Silver                SUCCESS
-    ✓ Sellers Silver                 SUCCESS
-    ✓ Customer Dimension             SUCCESS
-    ✓ Product Dimension              SUCCESS
-    ✓ Seller Dimension               SUCCESS
-    ✓ Date Dimension                 SUCCESS
-    ✓ Fact Sales                     SUCCESS
-    ✓ Fact Orders                    SUCCESS
-    ✓ Fact Sales Quality             SUCCESS
-    ✓ Fact Orders Quality            SUCCESS
+                       dim_customer
+                                                   │
+                                                                               │ 1 : *
+                                                                                                           ▼
+                                                                                                           dim_product ─────────► fact_sales ◄──────── dim_seller
+                                                                                                                1 : *                                      1 : *
+                                                                                                                                            ▲
+                                                                                                                                                                        │ 1 : *
+                                                                                                                                                                                                    │
+                                                                                                                                                                                                                            dim_date
 
-    Steps:    15/15
-    Status:   SUCCESS
+                                                                                                                                                                                                                            fact_orders also uses the customer and date dimensions.
 
----
+                                                                                                                                                                                                                            ### fact_sales
 
-## Data Quality
+                                                                                                                                                                                                                            Grain:
 
-The pipeline contains automated data quality checks for the Gold fact tables.
+                                                                                                                                                                                                                            One row per order item / product line.
 
-### Fact Sales
+                                                                                                                                                                                                                            Contains:
 
-The quality checks verify:
+                                                                                                                                                                                                                            - order_id
+                                                                                                                                                                                                                            - order_item_id
+                                                                                                                                                                                                                            - customer_key
+                                                                                                                                                                                                                            - product_key
+                                                                                                                                                                                                                            - seller_key
+                                                                                                                                                                                                                            - date_key
+                                                                                                                                                                                                                            - order_status
+                                                                                                                                                                                                                            - order_purchase_timestamp
+                                                                                                                                                                                                                            - price
+                                                                                                                                                                                                                            - freight_value
+                                                                                                                                                                                                                            - item_total
 
-- Row count
-- Duplicate order item IDs
-- Missing customer keys
-- Missing product keys
-- Missing seller keys
-- Missing date keys
-- Negative prices
-- Negative freight values
-- Negative item totals
-- Consistency of calculated item totals
+                                                                                                                                                                                                                            ### fact_orders
 
-### Fact Orders
+                                                                                                                                                                                                                            Grain:
 
-The quality checks verify:
+                                                                                                                                                                                                                            One row per order.
 
-- Row count
-- Duplicate order IDs
-- Missing customer keys
-- Missing date keys
-- Payment aggregation
-- Delivery duration
-- Invalid delivery values
-- Order status distribution
+                                                                                                                                                                                                                            Contains:
 
-Run all tests with:
+                                                                                                                                                                                                                            - order_id
+                                                                                                                                                                                                                            - customer_key
+                                                                                                                                                                                                                            - date_key
+                                                                                                                                                                                                                            - order_status
+                                                                                                                                                                                                                            - purchase timestamps
+                                                                                                                                                                                                                            - delivery information
+                                                                                                                                                                                                                            - payment information
+                                                                                                                                                                                                                            - payment count
+                                                                                                                                                                                                                            - payment installments
+                                                                                                                                                                                                                            - payment type
 
-    pytest
+                                                                                                                                                                                                                            Payment records are aggregated to the order level before being joined to fact_orders. This prevents one-to-many payment relationships from multiplying order rows.
 
----
+                                                                                                                                                                                                                            ### Dimensions
 
-## DuckDB
+                                                                                                                                                                                                                            dim_customer
 
-DuckDB is used as the analytical SQL engine on top of the Gold Parquet data.
+                                                                                                                                                                                                                            Customer master data with a generated surrogate customer_key.
 
-Parquet and DuckDB have different responsibilities.
+                                                                                                                                                                                                                            dim_product
 
-Parquet is the persistent storage layer and contains the actual Gold data.
+                                                                                                                                                                                                                            Product master data with a generated surrogate product_key and derived product volume.
 
-DuckDB is the analytical query layer. It reads the Gold Parquet files and provides reusable SQL views.
+                                                                                                                                                                                                                            dim_seller
 
-The architecture is therefore:
+                                                                                                                                                                                                                            Seller master data with a generated surrogate seller_key.
 
-    Gold Parquet
-         │
-         ▼
-       DuckDB
-         │
-         ▼
-    SQL Analytics
-         │
-         ▼
-    Apache Superset
+                                                                                                                                                                                                                            dim_date
 
-The DuckDB database is stored at:
+                                                                                                                                                                                                                            Calendar dimension containing date keys and calendar attributes such as year, month, quarter, day, and weekday.
 
-    data/analytics/analytics.duckdb
+                                                                                                                                                                                                                            ## PySpark Pipeline
 
-The project creates reusable analytical views such as:
+                                                                                                                                                                                                                            The complete pipeline consists of 15 processing and validation steps:
 
-- analytics_sales
-- analytics_orders
-- analytics_monthly_revenue
-- analytics_product_sales
+                                                                                                                                                                                                                            1. Bronze ingestion
+                                                                                                                                                                                                                            2. Orders Silver transformation
+                                                                                                                                                                                                                            3. Order Items Silver transformation
+                                                                                                                                                                                                                            4. Customers Silver transformation
+                                                                                                                                                                                                                            5. Products Silver transformation
+                                                                                                                                                                                                                            6. Sellers Silver transformation
+                                                                                                                                                                                                                            7. Order Payments Silver transformation
+                                                                                                                                                                                                                            8. Customer dimension
+                                                                                                                                                                                                                            9. Product dimension
+                                                                                                                                                                                                                            10. Seller dimension
+                                                                                                                                                                                                                            11. Date dimension
+                                                                                                                                                                                                                            12. Sales fact
+                                                                                                                                                                                                                            13. Orders fact
+                                                                                                                                                                                                                            14. Sales fact quality validation
+                                                                                                                                                                                                                            15. Orders fact quality validation
 
-The views query the Gold Parquet files directly.
+                                                                                                                                                                                                                            Run the complete pipeline with:
 
-This keeps the storage layer independent from the analytical engine.
+                                                                                                                                                                                                                            python -m src.pipeline
 
----
+                                                                                                                                                                                                                            The pipeline provides structured logging including:
 
-## DuckDB Queries
+                                                                                                                                                                                                                            - Step name
+                                                                                                                                                                                                                            - Success/failure status
+                                                                                                                                                                                                                            - Execution duration
+                                                                                                                                                                                                                            - Pipeline duration
+                                                                                                                                                                                                                            - Final pipeline status
 
-DuckDB can be used directly from Python.
+                                                                                                                                                                                                                            A successful reference run completes all 15 steps.
 
-Example:
+                                                                                                                                                                                                                            ## Data Quality
 
-    from src.utils.duckdb import create_duckdb_connection
+                                                                                                                                                                                                                            Data-quality validation is implemented as an explicit part of the pipeline.
 
-    con = create_duckdb_connection()
+                                                                                                                                                                                                                            ### fact_sales
 
-    result = con.execute("""
-        SELECT *
-        FROM analytics_monthly_revenue
-        ORDER BY year, month
-    """).fetchall()
+                                                                                                                                                                                                                            Checks include:
 
-    for row in result:
-        print(row)
+                                                                                                                                                                                                                            - Row count
+                                                                                                                                                                                                                            - Duplicate order-item detection
+                                                                                                                                                                                                                            - Missing customer keys
+                                                                                                                                                                                                                            - Missing product keys
+                                                                                                                                                                                                                            - Missing seller keys
+                                                                                                                                                                                                                            - Missing date keys
+                                                                                                                                                                                                                            - Negative prices
+                                                                                                                                                                                                                            - Negative freight values
+                                                                                                                                                                                                                            - Item-total consistency
 
-    con.close()
+                                                                                                                                                                                                                            The current reference dataset produces approximately 112,650 fact_sales rows.
 
-The DuckDB database can also be inspected with:
+                                                                                                                                                                                                                            ### fact_orders
 
-    python -c "from src.utils.duckdb import create_duckdb_connection; con=create_duckdb_connection(); print(con.execute('SHOW ALL TABLES').fetchall()); con.close()"
+                                                                                                                                                                                                                            Checks include:
 
----
+                                                                                                                                                                                                                            - Row count
+                                                                                                                                                                                                                            - Duplicate order IDs
+                                                                                                                                                                                                                            - Missing customer keys
+                                                                                                                                                                                                                            - Missing date keys
+                                                                                                                                                                                                                            - Payment consistency
+                                                                                                                                                                                                                            - Payment record counts
+                                                                                                                                                                                                                            - Payment installments
+                                                                                                                                                                                                                            - Delivery duration
+                                                                                                                                                                                                                            - Invalid delivery values
 
-## Apache Superset
+                                                                                                                                                                                                                            The current reference dataset produces approximately 99,441 fact_orders rows.
 
-Apache Superset is used as the visualization layer.
+                                                                                                                                                                                                                            ## Testing
 
-Superset connects to DuckDB and uses the analytical views as datasets.
+                                                                                                                                                                                                                            The project uses pytest.
 
-The complete analytics flow is:
+                                                                                                                                                                                                                            Run all tests with:
 
-    Gold Parquet
-         │
-         ▼
-       DuckDB
-         │
-         ▼
-    DuckDB Views
-         │
-         ▼
-    Apache Superset
-         │
-         ▼
-      Dashboard
+                                                                                                                                                                                                                            pytest
 
-### Superset Setup
+                                                                                                                                                                                                                            The current test suite covers:
 
-Apache Superset 6.0.0 is used and runs in Docker.
+                                                                                                                                                                                                                            - Customers transformation
+                                                                                                                                                                                                                            - Orders transformation
+                                                                                                                                                                                                                            - Order items transformation
+                                                                                                                                                                                                                            - Payments transformation
+                                                                                                                                                                                                                            - Products transformation
+                                                                                                                                                                                                                            - Sellers transformation
+                                                                                                                                                                                                                            - Fact sales construction
+                                                                                                                                                                                                                            - Fact orders construction
+                                                                                                                                                                                                                            - Fact sales quality
+                                                                                                                                                                                                                            - Fact orders quality
 
-Clone the official Superset repository:
+                                                                                                                                                                                                                            Current test result:
 
-    git clone https://github.com/apache/superset
-    cd superset
-    git checkout tags/6.0.0
+                                                                                                                                                                                                                            10 passed
 
-Start Superset:
+                                                                                                                                                                                                                            ## DuckDB
 
-    docker compose -f docker-compose-image-tag.yml up -d
+                                                                                                                                                                                                                            DuckDB provides the analytical SQL layer on top of the Gold Parquet datasets.
 
-Superset is available at:
+                                                                                                                                                                                                                            The DuckDB database is stored at:
 
-    http://localhost:8088
+                                                                                                                                                                                                                            data/analytics/analytics.duckdb
 
-Default development credentials:
+                                                                                                                                                                                                                            The database file is intentionally excluded from Git because it can be recreated from the Gold layer.
 
-    Username: admin
-    Password: admin
+                                                                                                                                                                                                                            Current analytical views:
 
-### DuckDB Dependencies
+                                                                                                                                                                                                                            - analytics_sales
+                                                                                                                                                                                                                            - analytics_orders
+                                                                                                                                                                                                                            - analytics_monthly_revenue
+                                                                                                                                                                                                                            - analytics_product_sales
 
-Create or update:
+                                                                                                                                                                                                                            DuckDB reads the Gold Parquet datasets directly.
 
-    docker/requirements-local.txt
+                                                                                                                                                                                                                            Architecture:
 
-with:
+                                                                                                                                                                                                                            Gold Parquet
+                                                                                                                                                                                                                                 ↓
+                                                                                                                                                                                                                                 DuckDB
+                                                                                                                                                                                                                                      ↓
+                                                                                                                                                                                                                                      Analytical Views
+                                                                                                                                                                                                                                           ↓
+                                                                                                                                                                                                                                           SQL / BI
 
-    duckdb>=1.5.5,<2
-    duckdb-engine>=0.17.0
+                                                                                                                                                                                                                                           ## Apache Superset
 
-Restart Superset:
+                                                                                                                                                                                                                                           Apache Superset is used as the Linux visualization and dashboard layer.
 
-    docker compose -f docker-compose-image-tag.yml up -d
+                                                                                                                                                                                                                                           The repository contains only the project-specific Superset deployment configuration. The complete Apache Superset source repository is not included.
 
-Verify the DuckDB installation:
+                                                                                                                                                                                                                                           Superset configuration:
 
-    docker exec superset_app python -c "import duckdb, duckdb_engine; print('duckdb:', duckdb.__version__); print('duckdb-engine: OK')"
+                                                                                                                                                                                                                                           superset/
+                                                                                                                                                                                                                                           ├── docker-compose.yml
+                                                                                                                                                                                                                                           ├── docker/
+                                                                                                                                                                                                                                           │   ├── .env.example
+                                                                                                                                                                                                                                           │   ├── requirements-local.txt
+                                                                                                                                                                                                                                           │   └── superset_config.py
+                                                                                                                                                                                                                                           ├── dashboard/
+                                                                                                                                                                                                                                           │   └── superset-overview.png
+                                                                                                                                                                                                                                           └── README.md
 
-### Mounting the Analytics Data
+                                                                                                                                                                                                                                           The current deployment uses Apache Superset 6.0.0.
 
-Superset needs access to:
+                                                                                                                                                                                                                                           Architecture:
 
-    data/analytics/analytics.duckdb
+                                                                                                                                                                                                                                           PySpark
+                                                                                                                                                                                                                                              ↓
+                                                                                                                                                                                                                                              Gold Parquet
+                                                                                                                                                                                                                                                 ↓
+                                                                                                                                                                                                                                                 DuckDB
+                                                                                                                                                                                                                                                    ↓
+                                                                                                                                                                                                                                                    Apache Superset
+                                                                                                                                                                                                                                                       ↓
+                                                                                                                                                                                                                                                       Dashboard
 
-and:
+                                                                                                                                                                                                                                                       The Superset container mounts:
 
-    data/gold/
+                                                                                                                                                                                                                                                       data/analytics → /app/analytics
+                                                                                                                                                                                                                                                       data/gold      → /app/gold
 
-A recommended directory structure is:
+                                                                                                                                                                                                                                                       DuckDB view configuration uses:
 
-    workspace/
-    │
-    ├── pyspark-analytics-pipeline/
-    │   ├── data/
-    │   │   ├── analytics/
-    │   │   │   └── analytics.duckdb
-    │   │   │
-    │   │   └── gold/
-    │   │       ├── fact_sales/
-    │   │       ├── fact_orders/
-    │   │       ├── dim_customer/
-    │   │       ├── dim_product/
-    │   │       ├── dim_seller/
-    │   │       └── dim_date/
-    │   │
-    │   └── src/
-    │
-    └── superset/
-        ├── docker-compose-image-tag.yml
-        └── docker/
-            └── requirements-local.txt
+                                                                                                                                                                                                                                                       DUCKDB_GOLD_ROOT=/app/gold
 
-The Superset Docker Compose configuration should mount the analytics directory:
+                                                                                                                                                                                                                                                       The local Superset .env file is intentionally excluded from Git.
 
-    - ../pyspark-analytics-pipeline/data/analytics:/app/analytics
+                                                                                                                                                                                                                                                       Use superset/docker/.env.example as the configuration template.
 
-and the Gold directory as read-only:
+                                                                                                                                                                                                                                                       ### Start Superset
 
-    - ../pyspark-analytics-pipeline/data/gold:/app/gold:ro
+                                                                                                                                                                                                                                                       From the project root:
 
-After changing the Docker configuration:
+                                                                                                                                                                                                                                                       cd superset
+                                                                                                                                                                                                                                                       docker compose up -d
 
-    docker compose -f docker-compose-image-tag.yml up -d
+                                                                                                                                                                                                                                                       Check the containers:
 
-### Connecting Superset to DuckDB
+                                                                                                                                                                                                                                                       docker compose ps
 
-In Superset:
+                                                                                                                                                                                                                                                       Superset is available at:
 
-1. Open Settings → Database Connections
-2. Click + Database
-3. Select DuckDB
-4. Enter the SQLAlchemy URI:
+                                                                                                                                                                                                                                                       http://localhost:8088
 
-    duckdb:////app/analytics/analytics.duckdb
+                                                                                                                                                                                                                                                       ### Superset Dashboard
 
-5. Click Test Connection
-6. Save the database connection
+                                                                                                                                                                                                                                                       The completed dashboard contains visualizations for:
 
-The following analytical views are then available:
+                                                                                                                                                                                                                                                       - Monthly revenue
+                                                                                                                                                                                                                                                       - Monthly order volume
+                                                                                                                                                                                                                                                       - Top product categories
+                                                                                                                                                                                                                                                       - Revenue by order status
 
-- analytics_sales
-- analytics_orders
-- analytics_monthly_revenue
-- analytics_product_sales
+                                                                                                                                                                                                                                                       Dashboard screenshot:
 
-### Superset Dashboard
+                                                                                                                                                                                                                                                       superset/dashboard/superset-overview.png
 
-The Superset dashboard provides an interactive overview of the e-commerce analytics data.
+                                                                                                                                                                                                                                                       ## Power BI
 
-It contains visualizations for:
+                                                                                                                                                                                                                                                       Power BI is planned as the Windows visualization layer.
 
-- Monthly revenue
-- Number of orders over time
-- Revenue by product category
-- Revenue by order status
+                                                                                                                                                                                                                                                       The intended architecture is:
 
-The dashboard is based on DuckDB analytical views instead of directly querying the raw CSV files.
+                                                                                                                                                                                                                                                       PySpark
+                                                                                                                                                                                                                                                          ↓
+                                                                                                                                                                                                                                                          Gold Parquet
+                                                                                                                                                                                                                                                             ↓
+                                                                                                                                                                                                                                                             DuckDB
+                                                                                                                                                                                                                                                                ↓
+                                                                                                                                                                                                                                                                Power BI
 
-![Apache Superset Dashboard](docs/images/superset-dashboard.png)
+                                                                                                                                                                                                                                                                The Linux/Superset environment is the primary implementation and test environment.
 
----
+                                                                                                                                                                                                                                                                The Windows / Power BI integration is kept separate so that the core PySpark pipeline remains platform-independent.
 
-## Power BI
+                                                                                                                                                                                                                                                                ## Running Individual Components
 
-Power BI can be used as an additional visualization layer.
+                                                                                                                                                                                                                                                                Bronze ingestion:
 
-The Gold Parquet data can be loaded into Power BI and used to create interactive reports.
+                                                                                                                                                                                                                                                                python -m src.ingestion.bronze_loader
 
-The intended architecture is:
+                                                                                                                                                                                                                                                                Dimensions:
 
-    Gold Parquet
-         │
-         ├──────────────► DuckDB ──────────────► Apache Superset
-         │
-         └──────────────► Power BI
+                                                                                                                                                                                                                                                                python -m src.analytics.dim_customer
+                                                                                                                                                                                                                                                                python -m src.analytics.dim_product
+                                                                                                                                                                                                                                                                python -m src.analytics.dim_seller
+                                                                                                                                                                                                                                                                python -m src.analytics.dim_date
 
-This allows the same Gold layer to be consumed by different analytical and visualization tools.
+                                                                                                                                                                                                                                                                Facts:
 
-Power BI integration is planned for the Windows environment.
+                                                                                                                                                                                                                                                                python -m src.analytics.fact_sales
+                                                                                                                                                                                                                                                                python -m src.analytics.fact_orders
 
----
+                                                                                                                                                                                                                                                                Quality checks:
 
-## Extensibility
+                                                                                                                                                                                                                                                                python -m src.analytics.fact_sales_quality
+                                                                                                                                                                                                                                                                python -m src.analytics.fact_orders_quality
 
-The pipeline is intentionally designed to support additional data sources.
+                                                                                                                                                                                                                                                                DuckDB views:
 
-Potential future ingestion connectors include:
+                                                                                                                                                                                                                                                                python -m src.analytics.duckdb_views
 
-- CSV
-- JSON
-- Parquet
-- SQL Database
-- REST API
-- Kafka
+                                                                                                                                                                                                                                                                ## Local Development
 
-The ingestion layer can be extended with source-specific readers while keeping the transformation and analytics layers independent from the original data source.
+                                                                                                                                                                                                                                                                Create a Python virtual environment:
 
-Example:
+                                                                                                                                                                                                                                                                python -m venv .venv
 
-    CSV ────────┐
-    JSON ───────┤
-    Parquet ────┤
-    SQL ────────┤
-    API ────────┤
-    Kafka ──────┘
-                 │
-                 ▼
-            Bronze Layer
-                 │
-                 ▼
-            Silver Layer
-                 │
-                 ▼
-             Gold Layer
+                                                                                                                                                                                                                                                                Activate it:
 
-## Key Design Principles
+                                                                                                                                                                                                                                                                source .venv/bin/activate
 
-### Separation of Storage and Analytics
+                                                                                                                                                                                                                                                                Install dependencies:
 
-Parquet is responsible for persistent data storage.
+                                                                                                                                                                                                                                                                pip install -r requirements.txt
 
-DuckDB is responsible for analytical SQL queries.
+                                                                                                                                                                                                                                                                The reference environment uses:
 
-Superset is responsible for visualization.
+                                                                                                                                                                                                                                                                - Python 3.12
+                                                                                                                                                                                                                                                                - PySpark 4.2.0
+                                                                                                                                                                                                                                                                - DuckDB 1.5.5
+                                                                                                                                                                                                                                                                - pytest
 
-This separation allows each component to be replaced or extended independently.
+                                                                                                                                                                                                                                                                ## Design Principles
 
-### Reusable Transformations
+                                                                                                                                                                                                                                                                ### Separation of concerns
 
-Business transformations are implemented as reusable PySpark functions instead of embedding all logic inside pipeline scripts.
+                                                                                                                                                                                                                                                                Ingestion, transformation, analytics, validation, and visualization are separated into dedicated modules.
 
-### Centralized Paths
+                                                                                                                                                                                                                                                                ### Layered data architecture
 
-Project paths are defined centrally in:
+                                                                                                                                                                                                                                                                Bronze, Silver, and Gold layers provide clear separation between source data, cleaned data, and analytics-ready data.
 
-    src/utils/paths.py
+                                                                                                                                                                                                                                                                ### Reusable transformations
 
-This avoids hardcoded absolute paths and makes the project portable across environments.
+                                                                                                                                                                                                                                                                Transformation functions operate on Spark DataFrames and are designed to be reusable.
 
-### Testability
+                                                                                                                                                                                                                                                                ### Dimensional modeling
 
-Transformations and analytical logic are separated into functions that can be tested independently with Pytest.
+                                                                                                                                                                                                                                                                The Gold layer follows a star schema suitable for BI and analytical workloads.
 
-### Extensibility
+                                                                                                                                                                                                                                                                ### Surrogate keys
 
-The ingestion architecture is designed so that additional data sources can be integrated without redesigning the complete pipeline.
+                                                                                                                                                                                                                                                                Dimensions use surrogate keys to decouple the analytical model from source-system identifiers.
 
----
+                                                                                                                                                                                                                                                                ### Data quality
 
-## Results
+                                                                                                                                                                                                                                                                Data-quality validation is implemented as part of the pipeline rather than as a separate manual process.
 
-The current Olist implementation successfully processes approximately:
+                                                                                                                                                                                                                                                                ### Separation of compute and BI
 
-- 100,000 orders
-- 112,000 order items
-- 3,000 sellers
+                                                                                                                                                                                                                                                                PySpark handles ETL and data preparation.
 
-The pipeline produces:
+                                                                                                                                                                                                                                                                DuckDB provides analytical SQL access.
 
-    Bronze Parquet
-    Silver Parquet
-    Gold Fact Tables
-    Gold Dimension Tables
-    DuckDB Analytical Views
-    Apache Superset Dashboard
+                                                                                                                                                                                                                                                                Superset and Power BI provide visualization.
 
-The complete pipeline currently executes all 15 stages successfully.
+                                                                                                                                                                                                                                                                ### Extensibility
 
----
+                                                                                                                                                                                                                                                                The architecture is designed to support additional data sources and ingestion mechanisms.
 
-## License
+                                                                                                                                                                                                                                                                ## Future Extensions
 
-This project is intended as a personal data engineering and analytics portfolio project.
+                                                                                                                                                                                                                                                                Potential future extensions include:
 
-The Olist dataset is provided by Olist and is subject to its original dataset license and terms.
+                                                                                                                                                                                                                                                                - Additional CSV sources
+                                                                                                                                                                                                                                                                - JSON ingestion
+                                                                                                                                                                                                                                                                - Parquet ingestion
+                                                                                                                                                                                                                                                                - SQL database connectors
+                                                                                                                                                                                                                                                                - REST API ingestion
+                                                                                                                                                                                                                                                                - Kafka / streaming ingestion
+                                                                                                                                                                                                                                                                - Incremental processing
+                                                                                                                                                                                                                                                                - Partitioning strategies
+                                                                                                                                                                                                                                                                - Schema validation
+                                                                                                                                                                                                                                                                - Data contracts
+                                                                                                                                                                                                                                                                - Slowly Changing Dimensions
+                                                                                                                                                                                                                                                                - Advanced Spark SQL analytics
+                                                                                                                                                                                                                                                                - Window-function based KPIs
+                                                                                                                                                                                                                                                                - Additional BI dashboards
+                                                                                                                                                                                                                                                                - Power BI integration
+                                                                                                                                                                                                                                                                - CI/CD
+                                                                                                                                                                                                                                                                - Cloud object storage such as S3
+                                                                                                                                                                                                                                                                - Workflow orchestration
+
+                                                                                                                                                                                                                                                                ## Git Hygiene
+
+                                                                                                                                                                                                                                                                The following local/generated files are intentionally excluded from Git:
+
+                                                                                                                                                                                                                                                                - Superset .env files
+                                                                                                                                                                                                                                                                - Superset local state
+                                                                                                                                                                                                                                                                - DuckDB database files
+                                                                                                                                                                                                                                                                - Generated analytics data
+                                                                                                                                                                                                                                                                - Other runtime artifacts
+
+                                                                                                                                                                                                                                                                The repository should contain project configuration and source code, not local credentials or runtime state.
+
+                                                                                                                                                                                                                                                                ## Status
+
+                                                                                                                                                                                                                                                                Current implementation:
+
+                                                                                                                                                                                                                                                                - PySpark ETL pipeline: complete
+                                                                                                                                                                                                                                                                - Bronze layer: complete
+                                                                                                                                                                                                                                                                - Silver layer: complete
+                                                                                                                                                                                                                                                                - Gold star schema: complete
+                                                                                                                                                                                                                                                                - fact_sales: complete
+                                                                                                                                                                                                                                                                - fact_orders: complete
+                                                                                                                                                                                                                                                                - Data-quality validation: complete
+                                                                                                                                                                                                                                                                - pytest test suite: complete
+                                                                                                                                                                                                                                                                - DuckDB analytics layer: complete
+                                                                                                                                                                                                                                                                - Apache Superset integration: complete
+                                                                                                                                                                                                                                                                - Superset dashboard: complete
+                                                                                                                                                                                                                                                                - Power BI / Windows integration: planned final validation
+
+                                                                                                                                                                                                                                                                The Linux-based analytics stack is currently the primary reference implementation.-superset-volumes:
+  &superset-volumes
+  - ./docker:/app/docker
+  - superset_home:/app/superset_home
+  - ../data/analytics:/app/analytics
+  - ../data/gold:/app/gold:ro
+
+
