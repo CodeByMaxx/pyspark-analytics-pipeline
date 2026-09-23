@@ -188,7 +188,7 @@ Apache Superset is used to visualize the processed analytics data.
 
 ### Dashboard Result
 
-![Superset Dashboard](superset/dashboard/superset-overview.png)
+![Superset Dashboard](./docs/images/superset-dashboard.png)
 
 The dashboard provides a visual representation of the analytical results produced by the pipeline.
 
