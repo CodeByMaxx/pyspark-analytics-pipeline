@@ -1,510 +1,246 @@
 # PySpark Analytics Pipeline
 
-A modular and extensible data analytics and ETL pipeline built with **Apache Spark (PySpark), Parquet, DuckDB, and Apache Superset**.
+An end-to-end data analytics pipeline built with Apache Spark, Parquet, DuckDB, and Apache Superset.
 
-The current implementation uses the **Brazilian E-Commerce Public Dataset by Olist** as its reference data source. The architecture is designed to support additional data sources and ingestion mechanisms in the future.
+The project processes the Olist e-commerce dataset through a structured Bronze, Silver, and Gold architecture and prepares the resulting data for analytical queries and dashboards.
+
+## Features
+
+* Apache PySpark data processing
+* Bronze / Silver / Gold data architecture
+* Parquet-based data storage
+* Data cleaning and transformation
+* Star-schema data model
+* Fact and dimension tables
+* Data quality checks
+* DuckDB analytics
+* Apache Superset dashboard
+* Automated tests with pytest
+* E-commerce analytics using the Olist dataset
 
 ## Architecture
 
 ```text
-Raw Data
-   │
-   ▼
-Bronze
-   │
-   ▼
-Silver
-   │
-   ▼
-Gold
-   │
-   ▼
-DuckDB
-   │
-   ├──► Apache Superset
-   │
-   └──► Power BI (planned)
+                 Olist Dataset
+                       │
+                       ▼
+                  Bronze Layer
+                 Raw / Ingested Data
+                       │
+                       ▼
+                  Silver Layer
+              Cleaned & Transformed
+                       │
+                       ▼
+                   Gold Layer
+                 Analytics Tables
+                       │
+              ┌────────┴────────┐
+              ▼                 ▼
+           DuckDB          Apache Superset
+              │                 │
+              └────────┬────────┘
+                       ▼
+                  Data Analytics
 ```
 
-**PySpark** handles ingestion, transformation, dimensional modeling, and data-quality validation.
+## Technology Stack
 
-**DuckDB** provides an analytical SQL layer directly on top of the Gold Parquet datasets.
-
-**Apache Superset** provides the current Linux-based dashboard environment, while Power BI integration is planned for Windows.
-
-## Features
-
-* PySpark-based ETL pipeline
-* Bronze / Silver / Gold data architecture
-* Parquet-based data storage
-* Star-schema dimensional model
-* Data-quality validation
-* Automated pytest test suite
-* DuckDB analytical layer
-* Apache Superset dashboard
-* Docker-based Superset environment
-* Structured pipeline logging
-* Extensible ingestion architecture
-
-## Data Source
-
-The initial implementation uses the **Olist Brazilian E-Commerce Public Dataset**.
-
-The dataset contains approximately 100,000 orders from the Brazilian e-commerce marketplace between 2016 and 2018.
-
-The source data contains information about:
-
-* Orders
-* Customers
-* Products
-* Sellers
-* Order items
-* Payments
-* Reviews
-* Geolocation
-* Product categories
-
-Raw CSV files are stored under:
-
-```text
-data/raw/
-```
-
-The pipeline itself is not limited to the Olist dataset.
+| Component       | Technology                 |
+| --------------- | -------------------------- |
+| Data Processing | Apache PySpark             |
+| Storage         | Parquet                    |
+| SQL Analytics   | DuckDB                     |
+| Dashboard       | Apache Superset            |
+| Testing         | pytest                     |
+| Dataset         | Olist Brazilian E-Commerce |
+| Language        | Python                     |
 
 ## Data Architecture
 
-### Raw
-
-The Raw layer contains the original source files without modification.
-
-Goals:
-
-* Preserve the original source data
-* Provide reproducible pipeline input
-* Separate source data from processing logic
+The pipeline follows a layered data architecture.
 
 ### Bronze
 
-The Bronze layer converts raw CSV data into Parquet.
+The Bronze layer contains the ingested source data in a form suitable for further processing.
 
-Current datasets include:
-
-* `customers`
-* `geolocation`
-* `order_items`
-* `order_payments`
-* `order_reviews`
-* `orders`
-* `products`
-* `sellers`
-* `product_category_name_translation`
-
-The Bronze ingestion logic is designed to be reusable for additional CSV sources.
+```text
+Source Data
+    │
+    ▼
+Bronze
+```
 
 ### Silver
 
-The Silver layer contains cleaned and standardized datasets.
+The Silver layer contains cleaned and transformed data.
 
-Transformations include:
+Typical processing includes:
 
-* Null filtering
-* Type casting
-* String normalization
-* Date conversion
-* Timestamp handling
-* Derived metrics
-* Numeric normalization
-* Business-rule preparation
+* data type conversion
+* cleaning
+* handling missing values
+* normalization
+* transformations
+* data quality checks
 
-Examples include:
-
-* Normalized order status
-* Standardized customer city and state
-* Cleaned product categories
-* Delivery duration
-* Item totals
-* Normalized payment fields
+```text
+Bronze
+   │
+   ▼
+Cleaning & Transformation
+   │
+   ▼
+Silver
+```
 
 ### Gold
 
-The Gold layer contains analytics-ready datasets based on a dimensional model.
+The Gold layer contains analytics-ready tables.
 
-Current Gold datasets:
+The project uses a star-schema approach with fact and dimension tables.
+
+```text
+                 Dimensions
+              ┌──────┼──────┐
+              │      │      │
+              ▼      ▼      ▼
+           Customer Product Date
+              │      │      │
+              └──────┼──────┘
+                     ▼
+                  Fact Tables
+```
+
+## Data Model
+
+The analytics layer contains fact tables such as:
 
 * `fact_sales`
 * `fact_orders`
-* `dim_customer`
-* `dim_product`
-* `dim_seller`
-* `dim_date`
 
-## Star Schema
+and supporting dimension tables.
 
-The Gold layer follows a star-schema design.
+The star-schema structure makes the data easier to query for business analytics.
+
+## Pipeline
+
+The processing workflow consists of multiple transformation steps covering ingestion, cleaning, transformation, modelling, and preparation of the final analytics tables.
+
+A simplified pipeline looks like this:
 
 ```text
-                    dim_customer
-                         │
-                         │
-                         ▼
-dim_product ───────► fact_sales ◄────── dim_seller
-                         ▲
-                         │
-                         │
-                      dim_date
-
-
-dim_customer ───────► fact_orders ◄────── dim_date
+1. Load source data
+2. Inspect source tables
+3. Clean raw data
+4. Transform data types
+5. Handle missing values
+6. Prepare Silver tables
+7. Create analytical relationships
+8. Build fact tables
+9. Build dimension tables
+10. Create Gold layer
+11. Run data quality checks
+12. Write Parquet data
+13. Query with DuckDB
+14. Prepare dashboard data
+15. Visualize results with Superset
 ```
-
-### `fact_sales`
-
-**Grain:** one row per order item / product line.
-
-Contains:
-
-* `order_id`
-* `order_item_id`
-* `customer_key`
-* `product_key`
-* `seller_key`
-* `date_key`
-* `order_status`
-* `order_purchase_timestamp`
-* `price`
-* `freight_value`
-* `item_total`
-
-### `fact_orders`
-
-**Grain:** one row per order.
-
-Contains:
-
-* `order_id`
-* `customer_key`
-* `date_key`
-* `order_status`
-* Purchase timestamps
-* Delivery information
-* Payment information
-* Payment count
-* Payment installments
-* Payment type
-
-Payment records are aggregated to the order level before being joined to `fact_orders`. This prevents one-to-many payment relationships from multiplying order rows.
-
-### Dimensions
-
-**`dim_customer`**
-
-Customer master data with a generated surrogate `customer_key`.
-
-**`dim_product`**
-
-Product master data with a generated surrogate `product_key` and derived product volume.
-
-**`dim_seller`**
-
-Seller master data with a generated surrogate `seller_key`.
-
-**`dim_date`**
-
-Calendar dimension containing date keys and calendar attributes such as year, month, quarter, day, and weekday.
-
-## PySpark Pipeline
-
-The complete pipeline consists of **15 processing and validation steps**:
-
-1. Bronze ingestion
-2. Orders Silver transformation
-3. Order Items Silver transformation
-4. Customers Silver transformation
-5. Products Silver transformation
-6. Sellers Silver transformation
-7. Order Payments Silver transformation
-8. Customer dimension
-9. Product dimension
-10. Seller dimension
-11. Date dimension
-12. Sales fact
-13. Orders fact
-14. Sales fact quality validation
-15. Orders fact quality validation
-
-Run the complete pipeline with:
-
-```bash
-python -m src.pipeline
-```
-
-The pipeline provides structured logging including:
-
-* Step name
-* Success/failure status
-* Execution duration
-* Total pipeline duration
-* Final pipeline status
-
-A successful reference run completes all 15 steps.
 
 ## Data Quality
 
-Data-quality validation is an explicit part of the pipeline.
+Data quality is checked during the processing workflow.
 
-### `fact_sales`
+The checks help identify problems such as:
 
-Checks include:
+* missing values
+* invalid data types
+* inconsistent records
+* duplicate records
+* unexpected values
 
-* Row count
-* Duplicate order-item detection
-* Missing customer keys
-* Missing product keys
-* Missing seller keys
-* Missing date keys
-* Negative prices
-* Negative freight values
-* Item-total consistency
+The goal is to ensure that the Gold layer contains reliable data for analytical queries.
 
-The current reference dataset produces approximately **112,650 `fact_sales` rows**.
+## DuckDB Analytics
 
-### `fact_orders`
+DuckDB is used to query the processed analytical data.
 
-Checks include:
+This provides a lightweight SQL interface for exploring the Parquet-based output without requiring a separate database server.
 
-* Row count
-* Duplicate order IDs
-* Missing customer keys
-* Missing date keys
-* Payment consistency
-* Payment record counts
-* Payment installments
-* Delivery duration
-* Invalid delivery values
-
-The current reference dataset produces approximately **99,441 `fact_orders` rows**.
-
-## Testing
-
-The project uses **pytest**.
-
-Run all tests with:
-
-```bash
-pytest
-```
-
-The test suite covers:
-
-* Customer transformations
-* Order transformations
-* Order-item transformations
-* Payment transformations
-* Product transformations
-* Seller transformations
-* `fact_sales` construction
-* `fact_orders` construction
-* `fact_sales` quality
-* `fact_orders` quality
-
-The documented reference result is:
+Example workflow:
 
 ```text
-10 passed
+Gold Parquet Data
+       │
+       ▼
+     DuckDB
+       │
+       ▼
+   SQL Queries
+       │
+       ▼
+ Analytical Results
 ```
 
-## DuckDB
+## Superset Dashboard
 
-DuckDB provides the analytical SQL layer on top of the Gold Parquet datasets.
+Apache Superset is used to visualize the processed analytics data.
 
-The database is stored at:
+### Dashboard Result
 
-```text
-data/analytics/analytics.duckdb
-```
+![Superset Dashboard](superset/dashboard/superset-overview.png)
 
-The database file is intentionally excluded from Git because it can be recreated from the Gold layer.
-
-Current analytical views include:
-
-* `analytics_sales`
-* `analytics_orders`
-* `analytics_monthly_revenue`
-* `analytics_product_sales`
-
-DuckDB reads the Gold Parquet datasets directly.
-
-```text
-Gold Parquet
-     │
-     ▼
-  DuckDB
-     │
-     ▼
-Analytical Views
-     │
-     ▼
- SQL / BI
-```
-
-## Apache Superset
-
-Apache Superset is the current Linux visualization and dashboard layer.
-
-The repository contains the project-specific Superset configuration rather than the complete Superset source repository.
-
-```text
-superset/
-├── docker-compose.yml
-├── docker/
-│   ├── .env.example
-│   ├── requirements-local.txt
-│   └── superset_config.py
-├── dashboard/
-│   └── superset-overview.png
-└── README.md
-```
-
-The current deployment uses **Apache Superset 6.0.0**.
-
-### Start Superset
-
-From the project root:
-
-```bash
-cd superset
-docker compose up -d
-```
-
-Check the containers:
-
-```bash
-docker compose ps
-```
-
-Superset is available at:
-
-```text
-http://localhost:8088
-```
-
-The local Superset `.env` file is intentionally excluded from Git. Use:
-
-```text
-superset/docker/.env.example
-```
-
-as the configuration template.
-
-### Dashboard
-
-The completed dashboard contains visualizations for:
-
-* Monthly revenue
-* Monthly order volume
-* Top product categories
-* Revenue by order status
-
-![Apache Superset Dashboard](superset/dashboard/superset-overview.png)
-
-The dashboard screenshot is included in the repository.
-
-## Power BI
-
-Power BI is planned as the **Windows visualization layer**.
-
-The intended architecture is:
-
-```text
-PySpark
-   │
-   ▼
-Gold Parquet
-   │
-   ▼
-DuckDB
-   │
-   ▼
-Power BI
-```
-
-The Linux/Superset environment is currently the primary implementation and test environment. The planned Power BI integration remains separate from the core PySpark pipeline so that the data-processing layer stays platform-independent.
+The dashboard provides a visual representation of the analytical results produced by the pipeline.
 
 ## Project Structure
 
 ```text
 pyspark-analytics-pipeline/
 ├── data/
-│   ├── raw/
-│   ├── bronze/
-│   ├── silver/
-│   ├── gold/
-│   └── analytics/
-│
-├── src/
-│   ├── ingestion/
-│   ├── transformations/
-│   ├── analytics/
-│   └── utils/
-│
 ├── docs/
 │   └── images/
-│
+├── src/
 ├── superset/
-│   ├── docker-compose.yml
-│   ├── docker/
-│   ├── dashboard/
-│   └── README.md
-│
+│   └── dashboard/
+│       └── superset-overview.png
 ├── tests/
 ├── requirements.txt
-├── README.md
-└── .gitignore
+└── README.md
 ```
 
-The current GitHub repository contains `data/`, `docs/images/`, `src/`, `superset/`, `tests/`, `requirements.txt`, and the project documentation.
+### `data/`
 
-## Running Individual Components
+Contains the data used and/or generated by the pipeline.
 
-### Bronze ingestion
+### `src/`
+
+Contains the PySpark pipeline implementation.
+
+### `tests/`
+
+Contains automated tests for the project.
+
+### `superset/`
+
+Contains the Superset-related dashboard configuration and visual result.
+
+### `docs/images/`
+
+Contains additional documentation images used by the project.
+
+## Testing
+
+The project uses pytest for automated testing.
+
+Run the test suite with:
 
 ```bash
-python -m src.ingestion.bronze_loader
+pytest
 ```
 
-### Dimensions
+Tests help verify the behaviour of individual parts of the data-processing workflow.
 
-```bash
-python -m src.analytics.dim_customer
-python -m src.analytics.dim_product
-python -m src.analytics.dim_seller
-python -m src.analytics.dim_date
-```
-
-### Facts
-
-```bash
-python -m src.analytics.fact_sales
-python -m src.analytics.fact_orders
-```
-
-### Quality checks
-
-```bash
-python -m src.analytics.fact_sales_quality
-python -m src.analytics.fact_orders_quality
-```
-
-### DuckDB views
-
-```bash
-python -m src.analytics.duckdb_views
-```
-
-These commands correspond to the current README's documented pipeline modules.
-
-## Local Development
+## Installation
 
 Create a Python virtual environment:
 
@@ -512,10 +248,16 @@ Create a Python virtual environment:
 python -m venv .venv
 ```
 
-Activate it:
+Activate it on Linux/macOS:
 
 ```bash
 source .venv/bin/activate
+```
+
+On Windows:
+
+```powershell
+.venv\Scripts\activate
 ```
 
 Install the dependencies:
@@ -524,127 +266,52 @@ Install the dependencies:
 pip install -r requirements.txt
 ```
 
-The documented reference environment uses:
+## Running the Pipeline
 
-* Python 3.12
-* PySpark 4.2.0
-* DuckDB 1.5.5
-* pytest
+After installing the dependencies, run the PySpark pipeline from the project according to the entry point provided under `src/`.
 
-## Design Principles
-
-### Separation of Concerns
-
-Ingestion, transformation, analytics, validation, and visualization are separated into dedicated modules.
-
-### Layered Data Architecture
-
-Bronze, Silver, and Gold provide a clear separation between source data, cleaned data, and analytics-ready data.
-
-### Reusable Transformations
-
-Transformation functions operate on Spark DataFrames and are designed to be reusable.
-
-### Dimensional Modeling
-
-The Gold layer follows a star schema suitable for BI and analytical workloads.
-
-### Surrogate Keys
-
-Dimensions use surrogate keys to decouple the analytical model from source-system identifiers.
-
-### Data Quality
-
-Validation is implemented as part of the pipeline rather than as a separate manual process.
-
-### Separation of Compute and BI
+The pipeline processes the source data and creates the layered analytical output.
 
 ```text
+Source
+  │
+  ▼
 PySpark
-   │
-   ├── ETL
-   └── Data preparation
-          │
-          ▼
-       DuckDB
-          │
-          ▼
-   ┌──────┴──────┐
-   ▼             ▼
-Superset      Power BI
-(current)     (planned)
+  │
+  ├──► Bronze
+  ├──► Silver
+  └──► Gold
+         │
+         ▼
+      Parquet
+         │
+         ├──► DuckDB
+         │
+         └──► Superset
 ```
 
-### Extensibility
+## Analytics Workflow
 
-The architecture is designed to support additional data sources and ingestion mechanisms.
+The final workflow connects data engineering and analytics:
 
-## Future Extensions
+```text
+Raw Data
+   │
+   ▼
+PySpark Processing
+   │
+   ▼
+Bronze / Silver / Gold
+   │
+   ▼
+Parquet
+   │
+   ├──► DuckDB ──► SQL Analytics
+   │
+   └──► Superset ──► Dashboard
+```
 
-Potential future extensions include:
+## Possible Improvements
 
-* Additional CSV sources
-* JSON ingestion
-* Parquet ingestion
-* SQL database connectors
-* REST API ingestion
-* Kafka / streaming ingestion
-* Incremental processing
-* Partitioning strategies
-* Schema validation
-* Data contracts
-* Slowly Changing Dimensions
-* Advanced Spark SQL analytics
-* Window-function-based KPIs
-* Additional BI dashboards
-* Power BI integration
-* CI/CD
-* Cloud object storage such as S3
-* Workflow orchestration
-
-## Git Hygiene
-
-The following local or generated files are intentionally excluded from Git:
-
-* Superset `.env` files
-* Superset local state
-* DuckDB database files
-* Generated analytics data
-* Other runtime artifacts
-
-The repository should contain project configuration and source code, not local credentials or runtime state.
-
-## Status
-
-### Current
-
-* PySpark ETL pipeline
-* Bronze layer
-* Silver layer
-* Gold star schema
-* `fact_sales`
-* `fact_orders`
-* Data-quality validation
-* pytest test suite
-* DuckDB analytics layer
-* Apache Superset integration
-* Superset dashboard
-
-### Planned
-
-* Power BI / Windows integration final validation
-
-The Linux-based PySpark, DuckDB and Superset stack is currently the primary reference implementation.
-
-## About
-
-A scalable PySpark-based data analytics pipeline demonstrating:
-
-* Modern ETL architecture
-* Layered data processing
-* Dimensional modeling
-* Data-quality engineering
-* Analytical SQL with DuckDB
-* BI dashboards with Apache Superset
-* Extensible data ingestion
+Possible future extensi
 
